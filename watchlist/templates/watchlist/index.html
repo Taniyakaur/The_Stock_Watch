@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock Watch</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7280;
+    --line: #e5e7eb; --accent: #2563eb; --accent-soft: #eff4ff;
+    --up: #15803d; --up-soft: #ecfdf3; --down: #b91c1c; --down-soft: #fef2f2;
+    --warn-soft: #fff7ed; --warn: #9a3412;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 16px 24px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 20px;
+            max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .lists { list-style: none; margin: 0 0 14px; padding: 0; }
+  .lists button { width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px;
+                  border-radius: 6px; font: inherit; color: inherit; cursor: pointer;
+                  display: flex; justify-content: space-between; }
+  .lists button:hover { background: var(--bg); }
+  .lists button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .lists .count { color: var(--muted); font-weight: 400; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+          min-width: 0; flex: 1 1 120px; background: #fff; color: inherit; }
+  input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .btn { font: inherit; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--accent);
+         background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+  .btn.ghost { background: #fff; color: var(--muted); border-color: var(--line); }
+  .btn.ghost:hover { color: var(--down); border-color: var(--down); }
+  .main-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .main-head h2 { font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  .add { background: var(--bg); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600;
+       text-transform: uppercase; letter-spacing: .04em; padding: 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sym { font-weight: 700; }
+  .name { color: var(--muted); font-size: 13px; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 13px; white-space: nowrap; }
+  .badge.hit { background: var(--up-soft); color: var(--up); }
+  .badge.wait { background: var(--bg); color: var(--muted); }
+  .badge.na { background: var(--warn-soft); color: var(--warn); }
+  td input.target { width: 100px; flex: none; text-align: right; padding: 4px 8px; }
+  .empty { text-align: center; color: var(--muted); padding: 36px 12px; }
+  .msg { padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; }
+  .msg.error { background: var(--down-soft); color: var(--down); }
+  .msg.ok { background: var(--up-soft); color: var(--up); }
+  .foot { color: var(--muted); font-size: 13px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Stock Watch</h1>
+  <p>Keep lists of stocks, see their live prices, and get told when one reaches your target price.</p>
+</header>
+
+<div class="layout">
+  <aside class="card">
+    <h2>Your watchlists</h2>
+    <ul class="lists" id="lists"></ul>
+    <form id="new-list">
+      <input id="new-list-name" placeholder="New list name, e.g. Tech" required maxlength="100">
+      <button class="btn">Create</button>
+    </form>
+  </aside>
+
+  <main class="card" id="main"></main>
+</div>
+
+<script>
+const API = "/api";
+let lists = [];
+let currentId = null;
+
+function csrf() {
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+async function api(path, options = {}) {
+  const resp = await fetch(API + path, {
+    ...options,
+    headers: { "Content-Type": "application/json", "X-CSRFToken": csrf(), ...(options.headers || {}) },
+  });
+  const data = resp.status === 204 ? null : await resp.json().catch(() => null);
+  if (!resp.ok) throw new Error(errorText(data) || `Something went wrong (${resp.status}).`);
+  return data;
+}
+
+function errorText(data) {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  if (data.detail) return data.detail;
+  return Object.entries(data).map(([field, msgs]) => {
+    const text = [].concat(msgs).join(" ");
+    return field === "non_field_errors" ? text : `${field.replace("_", " ")}: ${text}`;
+  }).join(" ");
+}
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+}
+
+function money(v) {
+  return v == null ? "—" : "$" + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+let flash = null;
+function setFlash(text, kind = "error") { flash = { text, kind }; }
+
+async function loadLists() {
+  lists = [];
+  let url = "/watchlists/";
+  while (url) {
+    const page = await api(url);
+    lists.push(...page.results);
+    url = page.next ? page.next.slice(page.next.indexOf(API) + API.length) : null;
+  }
+  lists.sort((a, b) => a.name.localeCompare(b.name));
+  if (!lists.some(l => l.id === currentId)) currentId = lists.length ? lists[0].id : null;
+  renderLists();
+}
+
+function renderLists() {
+  const ul = document.getElementById("lists");
+  ul.replaceChildren(...lists.map(l => el("li", {},
+    el("button", { class: l.id === currentId ? "active" : "", onclick: () => select(l.id) },
+      el("span", {}, l.name), el("span", { class: "count" }, String(l.items.length))))));
+  if (!lists.length) ul.append(el("li", { class: "hint" }, "No lists yet — create your first one below."));
+}
+
+async function select(id) {
+  currentId = id;
+  renderLists();
+  await renderMain();
+}
+
+async function renderMain() {
+  const main = document.getElementById("main");
+  const msg = flash ? el("div", { class: "msg " + flash.kind }, flash.text) : null;
+  flash = null;
+
+  if (currentId == null) {
+    main.replaceChildren(msg || "", el("div", { class: "empty" },
+      el("p", {}, "Start by creating a watchlist on the left."),
+      el("p", { class: "hint" }, "A watchlist is just a named group of stocks, like “Tech” or “Long term”.")));
+    return;
+  }
+
+  const wl = await api(`/watchlists/${currentId}/`);
+  const idx = lists.findIndex(l => l.id === wl.id);
+  if (idx >= 0) { lists[idx] = wl; renderLists(); }
+
+  const addForm = el("form", { class: "add", onsubmit: e => addStock(e, wl.id) },
+    el("input", { name: "symbol", placeholder: "Stock symbol, e.g. AAPL", required: "", maxlength: "10" }),
+    el("input", { name: "target", placeholder: "Target price (optional)", type: "number", step: "0.01", min: "0" }),
+    el("input", { name: "notes", placeholder: "Note (optional)" }),
+    el("button", { class: "btn" }, "Add stock"));
+
+  let body;
+  if (!wl.items.length) {
+    body = el("div", { class: "empty" },
+      el("p", {}, "This list is empty."),
+      el("p", { class: "hint" }, "Type a stock symbol above (like AAPL for Apple or TSLA for Tesla) and press “Add stock”."));
+  } else {
+    const items = [...wl.items].sort((a, b) => a.stock_detail.symbol.localeCompare(b.stock_detail.symbol));
+    body = el("div", { class: "table-wrap" }, el("table", {},
+      el("thead", {}, el("tr", {},
+        el("th", {}, "Stock"), el("th", { class: "num" }, "Price"), el("th", { class: "num" }, "Today"),
+        el("th", { class: "num" }, "Target"), el("th", {}, "Status"), el("th", {}, ""))),
+      el("tbody", {}, ...items.map(itemRow))));
+  }
+
+  main.replaceChildren(
+    msg || "",
+    el("div", { class: "main-head" },
+      el("h2", {}, wl.name),
+      el("button", { class: "btn ghost", onclick: () => deleteList(wl) }, "Delete list")),
+    addForm, body,
+    el("p", { class: "foot" }, "Prices refresh every minute. “Today” is the change since yesterday’s close."));
+}
+
+function itemRow(item) {
+  const s = item.stock_detail;
+  const change = s.day_change_pct;
+  const changeCell = change == null ? el("td", { class: "num" }, "—")
+    : el("td", { class: "num " + (Number(change) >= 0 ? "up" : "down") },
+        (Number(change) >= 0 ? "▲ +" : "▼ ") + Number(change).toFixed(2) + "%");
+
+  let status;
+  if (s.current_price == null) status = el("span", { class: "badge na", title: "Check that the symbol is spelled correctly." }, "No price found");
+  else if (item.target_price == null) status = el("span", { class: "badge wait" }, "No target set");
+  else if (item.target_reached) status = el("span", { class: "badge hit" }, "✓ Target reached");
+  else {
+    const gap = (Number(item.target_price) / Number(s.current_price) - 1) * 100;
+    status = el("span", { class: "badge wait" }, `${gap.toFixed(1)}% to go`);
+  }
+
+  const target = el("input", {
+    class: "target", type: "number", step: "0.01", min: "0", placeholder: "Set…",
+    title: "Type a price and press Enter",
+    onkeydown: e => { if (e.key === "Enter") e.target.blur(); },
+    onchange: e => saveTarget(item, e.target.value),
+  });
+  if (item.target_price != null) target.value = item.target_price;
+
+  return el("tr", {},
+    el("td", {}, el("div", { class: "sym" }, s.symbol), s.name ? el("div", { class: "name" }, s.name) : null,
+      item.notes ? el("div", { class: "name" }, "📝 " + item.notes) : null),
+    el("td", { class: "num" }, money(s.current_price)),
+    changeCell,
+    el("td", { class: "num" }, target),
+    el("td", {}, status),
+    el("td", {}, el("button", { class: "btn ghost", onclick: () => removeItem(item) }, "Remove")));
+}
+
+async function run(action, okText) {
+  try {
+    await action();
+    if (okText) setFlash(okText, "ok");
+  } catch (err) {
+    setFlash(err.message);
+  }
+  await loadLists();
+  await renderMain();
+}
+
+document.getElementById("new-list").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("new-list-name");
+  run(async () => {
+    const wl = await api("/watchlists/", { method: "POST", body: JSON.stringify({ name: input.value }) });
+    currentId = wl.id;
+    input.value = "";
+  });
+});
+
+function addStock(e, watchlistId) {
+  e.preventDefault();
+  const f = e.target;
+  const symbol = f.symbol.value.trim().toUpperCase();
+  run(async () => {
+    const found = await api(`/stocks/?symbol=${encodeURIComponent(symbol)}`);
+    const stock = found.results[0] || await api("/stocks/", { method: "POST", body: JSON.stringify({ symbol }) });
+    const body = { watchlist: watchlistId, stock: stock.id, notes: f.notes.value };
+    if (f.target.value) body.target_price = f.target.value;
+    try {
+      await api("/items/", { method: "POST", body: JSON.stringify(body) });
+    } catch (err) {
+      if (/unique/i.test(err.message)) throw new Error(`${symbol} is already on this list.`);
+      throw err;
+    }
+  }, `Added ${symbol}.`);
+}
+
+function saveTarget(item, value) {
+  run(() => api(`/items/${item.id}/`, {
+    method: "PATCH", body: JSON.stringify({ target_price: value === "" ? null : value }),
+  }), value === "" ? "Target removed." : "Target saved.");
+}
+
+function removeItem(item) {
+  run(() => api(`/items/${item.id}/`, { method: "DELETE" }), `Removed ${item.stock_detail.symbol}.`);
+}
+
+function deleteList(wl) {
+  const main = document.getElementById("main");
+  if (main.querySelector(".confirm")) return;
+  const box = el("div", { class: "msg error confirm" },
+    `Delete “${wl.name}” and everything on it? `,
+    el("button", { class: "btn", onclick: () => run(() => api(`/watchlists/${wl.id}/`, { method: "DELETE" }), "List deleted.") }, "Yes, delete"),
+    " ",
+    el("button", { class: "btn ghost", onclick: () => box.remove() }, "Cancel"));
+  main.prepend(box);
+}
+
+(async () => {
+  try { await loadLists(); await renderMain(); }
+  catch (err) { setFlash("Couldn't reach the server. Is it running?"); await renderMain().catch(() => {}); }
+  setInterval(() => {
+    if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+    renderMain().catch(() => {});
+  }, 60000);
+})();
+</script>
+</body>
+</html>

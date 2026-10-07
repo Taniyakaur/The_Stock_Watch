@@ -2,15 +2,29 @@ import re
 
 from rest_framework import serializers
 
+from . import prices
 from .models import Stock, Watchlist, WatchlistItem
 
 SYMBOL_RE = re.compile(r"^[A-Z0-9.\-]{1,10}$")
 
 
 class StockSerializer(serializers.ModelSerializer):
+    current_price = serializers.SerializerMethodField()
+    day_change_pct = serializers.SerializerMethodField()
+
     class Meta:
         model = Stock
-        fields = ["id", "symbol", "name", "exchange"]
+        fields = ["id", "symbol", "name", "exchange", "current_price", "day_change_pct"]
+
+    def get_current_price(self, obj):
+        quote = prices.get_quote(obj.symbol)
+        return None if quote is None else str(quote["price"])
+
+    def get_day_change_pct(self, obj):
+        quote = prices.get_quote(obj.symbol)
+        if quote is None or quote["change_pct"] is None:
+            return None
+        return str(quote["change_pct"])
 
     def validate_symbol(self, value):
         # Field-level UniqueValidator runs on the raw value, so the
@@ -37,6 +51,7 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    target_reached = serializers.SerializerMethodField()
 
     class Meta:
         model = WatchlistItem
@@ -46,10 +61,20 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
             "stock",
             "stock_detail",
             "target_price",
+            "target_reached",
             "notes",
             "added_at",
         ]
         read_only_fields = ["added_at"]
+
+    def get_target_reached(self, obj):
+        """True once the live price is at or above the target price."""
+        if obj.target_price is None:
+            return None
+        price = prices.get_price(obj.stock.symbol)
+        if price is None:
+            return None
+        return price >= obj.target_price
 
 
 class WatchlistSerializer(serializers.ModelSerializer):

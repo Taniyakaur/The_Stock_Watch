@@ -102,3 +102,9 @@ def test_update_and_delete_watchlist(client):
     assert resp.data["name"] == "New"
     resp = client.delete(f"/api/watchlists/{wl.id}/")
     assert resp.status_code == 204
+
+
+def test_home_page_loads(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Stock Watch" in resp.content
