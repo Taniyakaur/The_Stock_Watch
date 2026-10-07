@@ -96,3 +96,38 @@ def test_update_and_delete_watchlist(client, user):
     assert resp.data["name"] == "New"
     resp = client.delete(f"/api/watchlists/{wl.id}/")
     assert resp.status_code == 204
+
+
+def test_add_example_watchlist(client, user, other_user):
+    from watchlist.examples import EXAMPLE_LIST_NAME, POPULAR_STOCKS
+
+    Stock.objects.create(symbol="AAPL", name="Already here")
+    resp = client.post("/api/watchlists/example/")
+    assert resp.status_code == 201
+    assert resp.data["name"] == EXAMPLE_LIST_NAME
+    symbols = {i["stock_detail"]["symbol"] for i in resp.data["items"]}
+    assert symbols == {s for s, _, _ in POPULAR_STOCKS}
+    assert Watchlist.objects.get(id=resp.data["id"]).owner == user
+    # Existing stocks are reused, not duplicated.
+    assert Stock.objects.filter(symbol="AAPL").count() == 1
+    assert Stock.objects.get(symbol="AAPL").name == "Already here"
+
+
+def test_example_watchlist_is_a_private_copy(client, user, other_user):
+    from rest_framework.test import APIClient
+
+    client.post("/api/watchlists/example/")
+    bob = APIClient()
+    bob.force_authenticate(other_user)
+    bob.post("/api/watchlists/example/")
+    assert Watchlist.objects.filter(owner=user).count() == 1
+    assert Watchlist.objects.filter(owner=other_user).count() == 1
+    assert Stock.objects.count() == 10
+
+
+def test_example_watchlist_not_duplicated(client, user):
+    first = client.post("/api/watchlists/example/")
+    again = client.post("/api/watchlists/example/")
+    assert again.status_code == 200
+    assert again.data["id"] == first.data["id"]
+    assert Watchlist.objects.filter(owner=user).count() == 1

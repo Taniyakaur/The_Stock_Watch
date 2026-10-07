@@ -3,6 +3,7 @@
 A small Django app for keeping watchlists of stocks. It shows live prices and 30-day trends, and emails you when a stock reaches the target price you set.
 
 - **Watchlists:** group stocks into named lists (e.g. "Tech", "Long term"). Each account sees only its own lists.
+- **Example list:** one click adds a "Popular stocks" list with 10 of the largest US companies (Apple, Microsoft, NVIDIA, Alphabet, Amazon, Meta, Broadcom, Tesla, JPMorgan Chase, Visa). Each person gets their own copy to edit. The list is defined in `watchlist/examples.py`.
 - **Live prices:** current price and today's change from [Finnhub](https://finnhub.io), or Yahoo Finance when no Finnhub key is set. The company name is filled in automatically.
 - **Charts:** a 30-day sparkline for every stock. Click a symbol for a 1-month / 6-month / 1-year chart with your target marked.
 - **Alerts:** one email when a stock reaches your target. The alert re-arms if the price drops back below the target or you change the target.
@@ -53,6 +54,7 @@ All endpoints need a logged-in user. Lists are paginated, 20 per page.
 |---|---|
 | `GET/POST /api/watchlists/` | Your watchlists, each with its items |
 | `GET/PATCH/DELETE /api/watchlists/<id>/` | One watchlist |
+| `POST /api/watchlists/example/` | Add the "Popular stocks" example list, or get the one you already have |
 | `GET/POST /api/items/?watchlist=<id>` | Stocks on your lists: target price, `target_reached`, notes |
 | `PATCH/DELETE /api/items/<id>/` | Change a target or note, or remove a stock from a list |
 | `GET/POST /api/stocks/?symbol=AAPL` | The shared stock list, with `current_price` and `day_change_pct`. Editing and deleting stocks is admin-only. |

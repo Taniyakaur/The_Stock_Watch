@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from . import prices
+from .examples import EXAMPLE_LIST_NAME, create_example_watchlist
 from .forms import SignUpForm
 from .models import Stock, Watchlist, WatchlistItem
 from .serializers import (
@@ -90,6 +91,17 @@ class WatchlistViewSet(WarmPricesMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    @action(detail=False, methods=["post"])
+    def example(self, request):
+        """POST /api/watchlists/example/ adds a "Popular stocks" list for you
+        (or returns the one you already have)."""
+        existing = self.get_queryset().filter(name=EXAMPLE_LIST_NAME).first()
+        if existing is not None:
+            return Response(self.get_serializer(existing).data)
+        watchlist = create_example_watchlist(request.user)
+        watchlist = self.get_queryset().get(pk=watchlist.pk)
+        return Response(self.get_serializer(watchlist).data, status=status.HTTP_201_CREATED)
 
     def symbols_for(self, obj):
         return [item.stock.symbol for item in obj.items.all()]

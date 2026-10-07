@@ -9,6 +9,7 @@
       <input id="new-list-name" placeholder="New list name, e.g. Tech" required maxlength="100">
       <button class="btn">Create</button>
     </form>
+    <button class="btn ghost example-btn" id="add-example">+ Add a list of popular stocks</button>
   </aside>
 
   <main class="card" id="main"></main>
@@ -105,7 +106,8 @@ async function renderMain() {
   if (currentId == null) {
     main.replaceChildren(msg || "", el("div", { class: "empty" },
       el("p", {}, "Start by creating a watchlist on the left."),
-      el("p", { class: "hint" }, "A watchlist is just a named group of stocks, like “Tech” or “Long term”.")));
+      el("p", { class: "hint" }, "A watchlist is just a named group of stocks, like “Tech” or “Long term”."),
+      el("p", {}, el("button", { class: "btn", onclick: addExample }, "Or start with 10 popular stocks"))));
     return;
   }
 
@@ -387,6 +389,20 @@ document.getElementById("new-list").addEventListener("submit", e => {
     input.value = "";
   });
 });
+
+function addExample() {
+  const existing = lists.find(l => l.name === "Popular stocks");
+  if (existing) {
+    setFlash("You already have the Popular stocks list — here it is.", "ok");
+    select(existing.id);
+    return;
+  }
+  run(async () => {
+    const wl = await api("/watchlists/example/", { method: "POST" });
+    currentId = wl.id;
+  }, "Added an example list of 10 popular stocks. Edit or delete it any time.");
+}
+document.getElementById("add-example").addEventListener("click", addExample);
 
 function addStock(e, watchlistId) {
   e.preventDefault();
