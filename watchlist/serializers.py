@@ -86,6 +86,12 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
             return None
         return price >= obj.target_price
 
+    def validate_watchlist(self, value):
+        # Don't reveal whether someone else's watchlist id exists.
+        if value.owner_id != self.context["request"].user.id:
+            raise serializers.ValidationError("Watchlist not found.")
+        return value
+
 
 class WatchlistSerializer(serializers.ModelSerializer):
     items = WatchlistItemSerializer(many=True, read_only=True)

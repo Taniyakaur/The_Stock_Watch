@@ -1,0 +1,25 @@
+{% extends "watchlist/base.html" %}
+{% block title %}Log in · Stock Watch{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="card">
+    <h2>Log in</h2>
+    <p class="hint">Welcome back. Log in to see your watchlists.</p>
+    {% if form.non_field_errors %}<div class="msg error">Your username and password didn't match. Please try again.</div>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div>
+        <label for="id_username">Username</label>
+        <input type="text" name="username" id="id_username" autocomplete="username" required autofocus value="{{ form.username.value|default:'' }}">
+      </div>
+      <div>
+        <label for="id_password">Password</label>
+        <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+      </div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn">Log in</button>
+    </form>
+    <p class="switch">New here? <a href="{% url 'signup' %}">Create an account</a></p>
+  </div>
+</div>
+{% endblock %}

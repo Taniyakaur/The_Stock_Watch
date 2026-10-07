@@ -1,7 +1,9 @@
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from rest_framework.test import APIClient
 
 from watchlist import prices
 
@@ -32,3 +34,40 @@ def fake_prices(monkeypatch):
     monkeypatch.setattr(prices, "_history_yahoo", lambda symbol, period: FAKE_HISTORY.get(symbol, []))
     yield calls
     cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def fast_passwords(settings):
+    # The real password hasher is deliberately slow; tests don't need that.
+    settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+
+@pytest.fixture
+def user(db):
+    return get_user_model().objects.create_user("alice", "alice@example.com", "pw-alice-123")
+
+
+@pytest.fixture
+def other_user(db):
+    return get_user_model().objects.create_user("bob", "bob@example.com", "pw-bob-123")
+
+
+@pytest.fixture
+def client(user):
+    """An API client logged in as `user`."""
+    c = APIClient()
+    c.force_authenticate(user)
+    return c
+
+
+@pytest.fixture
+def anon_client():
+    return APIClient()
+
+
+@pytest.fixture
+def admin_client(db):
+    admin = get_user_model().objects.create_superuser("admin", "admin@example.com", "pw-admin-123")
+    c = APIClient()
+    c.force_authenticate(admin)
+    return c

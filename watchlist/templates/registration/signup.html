@@ -1,0 +1,24 @@
+{% extends "watchlist/base.html" %}
+{% block title %}Create account · Stock Watch{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="card">
+    <h2>Create an account</h2>
+    <p class="hint">Your watchlists are private to your account.</p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+      <div>
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {{ field.errors }}
+        {% if field.name == "email" %}<span class="help">{{ field.help_text }}</span>{% endif %}
+        {% if field.name == "password1" %}<span class="help">At least 8 characters, not too common, and not all numbers.</span>{% endif %}
+      </div>
+      {% endfor %}
+      <button class="btn">Create account</button>
+    </form>
+    <p class="switch">Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+  </div>
+</div>
+{% endblock %}

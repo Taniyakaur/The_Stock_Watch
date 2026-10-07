@@ -1,15 +1,9 @@
 import pytest
-from rest_framework.test import APIClient
 
 from watchlist import prices
 from watchlist.models import Stock, Watchlist, WatchlistItem
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture
-def client():
-    return APIClient()
 
 
 def test_stock_includes_current_price(client):
@@ -29,16 +23,16 @@ def test_unknown_symbol_price_is_null(client):
     "target, expected",
     [("150.00", True), ("200.00", True), ("250.00", False), (None, None)],
 )
-def test_target_reached(client, target, expected):
-    wl = Watchlist.objects.create(name="Tech")
+def test_target_reached(client, target, expected, user):
+    wl = Watchlist.objects.create(owner=user, name="Tech")
     stock = Stock.objects.create(symbol="AAPL")
     item = WatchlistItem.objects.create(watchlist=wl, stock=stock, target_price=target)
     resp = client.get(f"/api/items/{item.id}/")
     assert resp.data["target_reached"] is expected
 
 
-def test_target_reached_null_without_price(client):
-    wl = Watchlist.objects.create(name="Tech")
+def test_target_reached_null_without_price(client, user):
+    wl = Watchlist.objects.create(owner=user, name="Tech")
     stock = Stock.objects.create(symbol="ZZZZ")
     item = WatchlistItem.objects.create(watchlist=wl, stock=stock, target_price="10")
     resp = client.get(f"/api/items/{item.id}/")
@@ -53,8 +47,8 @@ def test_prices_are_cached(fake_prices):
     assert fake_prices == ["AAPL", "ZZZZ"]
 
 
-def test_watchlist_fetches_each_symbol_once(client, fake_prices):
-    wl = Watchlist.objects.create(name="Tech")
+def test_watchlist_fetches_each_symbol_once(client, fake_prices, user):
+    wl = Watchlist.objects.create(owner=user, name="Tech")
     for sym in ["AAPL", "MSFT"]:
         stock = Stock.objects.create(symbol=sym)
         WatchlistItem.objects.create(watchlist=wl, stock=stock, target_price="1")

@@ -1,13 +1,19 @@
+from django.contrib.auth import get_user_model, login
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.db.models import ProtectedError
+from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.generic import TemplateView
+from django.views.generic import CreateView, TemplateView
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from . import prices
+from .forms import SignUpForm
 from .models import Stock, Watchlist, WatchlistItem
 from .serializers import (
     StockSerializer,
@@ -31,7 +37,15 @@ class WarmPricesMixin:
 
 
 class StockViewSet(WarmPricesMixin, viewsets.ModelViewSet):
+    """Stocks are shared by everyone: any user can look them up or add one,
+    but only admins can edit or delete them."""
+
     serializer_class = StockSerializer
+
+    def get_permissions(self):
+        if self.action in ("update", "partial_update", "destroy"):
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = Stock.objects.all()
@@ -67,8 +81,15 @@ class StockViewSet(WarmPricesMixin, viewsets.ModelViewSet):
 
 
 class WatchlistViewSet(WarmPricesMixin, viewsets.ModelViewSet):
-    queryset = Watchlist.objects.prefetch_related("items__stock")
     serializer_class = WatchlistSerializer
+
+    def get_queryset(self):
+        return Watchlist.objects.filter(owner=self.request.user).prefetch_related(
+            "items__stock"
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
     def symbols_for(self, obj):
         return [item.stock.symbol for item in obj.items.all()]
@@ -81,7 +102,9 @@ class WatchlistItemViewSet(WarmPricesMixin, viewsets.ModelViewSet):
         return [obj.stock.symbol]
 
     def get_queryset(self):
-        qs = WatchlistItem.objects.select_related("stock")
+        qs = WatchlistItem.objects.filter(
+            watchlist__owner=self.request.user
+        ).select_related("stock")
         watchlist_id = self.request.query_params.get("watchlist")
         if watchlist_id:
             if not watchlist_id.isdigit():
@@ -91,7 +114,27 @@ class WatchlistItemViewSet(WarmPricesMixin, viewsets.ModelViewSet):
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
-class HomeView(TemplateView):
+class HomeView(LoginRequiredMixin, TemplateView):
     """The web page; all data is loaded from the API by the page's script."""
 
     template_name = "watchlist/index.html"
+
+
+class SignUpView(CreateView):
+    form_class = SignUpForm
+    template_name = "registration/signup.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            first_account = not get_user_model().objects.exists()
+            user = form.save()
+            if first_account:
+                # Watchlists made before accounts existed belong to the first user.
+                Watchlist.objects.filter(owner=None).update(owner=user)
+        login(self.request, user)
+        return redirect("home")

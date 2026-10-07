@@ -18,8 +18,9 @@ class WatchlistItemInline(admin.TabularInline):
 
 @admin.register(Watchlist)
 class WatchlistAdmin(admin.ModelAdmin):
-    list_display = ["name", "created_at"]
-    search_fields = ["name"]
+    list_display = ["name", "owner", "created_at"]
+    list_filter = ["owner"]
+    search_fields = ["name", "owner__username"]
     inlines = [WatchlistItemInline]
 
 
