@@ -137,3 +137,13 @@ def test_history_bad_range_rejected(client):
     stock = Stock.objects.create(symbol="AAPL")
     resp = client.get(f"/api/stocks/{stock.id}/history/?range=10y")
     assert resp.status_code == 400
+
+
+def test_quotes_are_cached_in_the_database():
+    from django.db import connection
+
+    prices.get_quote("AAPL")
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT cache_key FROM cache_table")
+        keys = [row[0] for row in cursor.fetchall()]
+    assert any("quote:AAPL" in k for k in keys)

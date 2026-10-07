@@ -7,7 +7,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import CreateView, TemplateView
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -123,6 +123,37 @@ class WatchlistItemViewSet(WarmPricesMixin, viewsets.ModelViewSet):
                 raise ValidationError({"watchlist": "Must be an integer id."})
             qs = qs.filter(watchlist_id=watchlist_id)
         return qs
+
+
+
+@api_view(["GET"])
+def watchlist_summary(request):
+    """GET /api/watchlist: every ticker on your watchlists with its latest
+    price and daily change, as one flat list."""
+    items = (
+        WatchlistItem.objects.filter(watchlist__owner=request.user)
+        .select_related("stock", "watchlist")
+        .order_by("stock__symbol", "watchlist__name")
+    )
+    quotes = prices.get_quotes(item.stock.symbol for item in items)
+    results = []
+    for item in items:
+        quote = quotes.get(item.stock.symbol)
+        price = quote["price"] if quote else None
+        change = quote["change_pct"] if quote else None
+        target = item.target_price
+        results.append({
+            "symbol": item.stock.symbol,
+            "name": item.stock.name,
+            "price": None if price is None else str(price),
+            "change_pct": None if change is None else str(change),
+            "target_price": None if target is None else str(target),
+            "target_reached": None if price is None or target is None else price >= target,
+            "watchlist": item.watchlist.name,
+            "watchlist_id": item.watchlist_id,
+            "item_id": item.id,
+        })
+    return Response({"count": len(results), "results": results})
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
