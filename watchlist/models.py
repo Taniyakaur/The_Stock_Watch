@@ -46,6 +46,8 @@ class WatchlistItem(models.Model):
     )
     notes = models.TextField(blank=True)
     added_at = models.DateTimeField(auto_now_add=True)
+    # Set when the "target reached" email goes out; cleared to re-arm the alert.
+    alert_sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-added_at"]

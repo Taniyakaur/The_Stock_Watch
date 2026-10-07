@@ -62,6 +62,23 @@ MIDDLEWARE = [
 # Live prices: Finnhub when a key is set, otherwise Yahoo Finance (yfinance).
 FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY", "")
 
+# Email for target-price alerts. Without EMAIL_HOST_USER, emails are printed
+# in the terminal instead of sent. For Gmail use an App Password:
+# https://support.google.com/accounts/answer/185833
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_BACKEND = (
+    "django.core.mail.backends.smtp.EmailBackend"
+    if EMAIL_HOST_USER
+    else "django.core.mail.backends.console.EmailBackend"
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "stockwatch@localhost"
+# Used for the link in alert emails.
+SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000/")
+
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",

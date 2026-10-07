@@ -141,7 +141,7 @@ async function renderMain() {
       el("button", { class: "btn ghost", onclick: () => deleteList(wl) }, "Delete list")),
     addForm, body,
     el("div", { id: "detail" }),
-    el("p", { class: "foot" }, "Prices refresh every minute. “Today” is the change since yesterday’s close. Click a symbol to see its chart."));
+    el("p", { class: "foot" }, "Prices refresh every minute. “Today” is the change since yesterday’s close. Click a symbol to see its chart. You’ll get an email when a stock reaches your target."));
 
   if (detail) {
     const item = wl.items.find(i => i.stock === detail.stockId);
@@ -159,7 +159,10 @@ function itemRow(item) {
   let status;
   if (s.current_price == null) status = el("span", { class: "badge na", title: "Check that the symbol is spelled correctly." }, "No price found");
   else if (item.target_price == null) status = el("span", { class: "badge wait" }, "No target set");
-  else if (item.target_reached) status = el("span", { class: "badge hit" }, "✓ Target reached");
+  else if (item.target_reached) status = el("span", {
+    class: "badge hit",
+    title: item.alert_sent_at ? "Alert emailed " + new Date(item.alert_sent_at).toLocaleString() : "An alert email will be sent shortly.",
+  }, item.alert_sent_at ? "✓ Target reached · emailed" : "✓ Target reached");
   else {
     const gap = (Number(item.target_price) / Number(s.current_price) - 1) * 100;
     status = el("span", { class: "badge wait" }, `${gap.toFixed(1)}% to go`);

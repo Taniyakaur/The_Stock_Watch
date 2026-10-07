@@ -72,10 +72,20 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
             "stock_detail",
             "target_price",
             "target_reached",
+            "alert_sent_at",
             "notes",
             "added_at",
         ]
-        read_only_fields = ["added_at"]
+        read_only_fields = ["added_at", "alert_sent_at"]
+
+    def update(self, instance, validated_data):
+        # A new target gets a fresh alert.
+        if (
+            "target_price" in validated_data
+            and validated_data["target_price"] != instance.target_price
+        ):
+            instance.alert_sent_at = None
+        return super().update(instance, validated_data)
 
     def get_target_reached(self, obj):
         """True once the live price is at or above the target price."""
