@@ -31,7 +31,9 @@ def fake_prices(monkeypatch):
     monkeypatch.setattr(prices, "_fetch", fetch)
     monkeypatch.setattr(prices, "get_profile", lambda symbol: FAKE_PROFILES.get(
         symbol, {"name": "", "exchange": ""}))
-    monkeypatch.setattr(prices, "_history_yahoo", lambda symbol, period: FAKE_HISTORY.get(symbol, []))
+    monkeypatch.setattr(
+        prices, "_history_yahoo", lambda symbol, period: FAKE_HISTORY.get(symbol, [])
+    )
     yield calls
     cache.clear()
 

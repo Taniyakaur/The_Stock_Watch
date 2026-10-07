@@ -75,7 +75,9 @@ EMAIL_BACKEND = (
     if EMAIL_HOST_USER
     else "django.core.mail.backends.console.EmailBackend"
 )
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "stockwatch@localhost"
+DEFAULT_FROM_EMAIL = (
+    os.environ.get("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "stockwatch@localhost"
+)
 # Used for the link in alert emails.
 SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000/")
 

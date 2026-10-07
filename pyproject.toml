@@ -1,0 +1,7 @@
+[tool.ruff]
+line-length = 100
+extend-exclude = ["watchlist/migrations"]
+
+[tool.ruff.lint]
+# Pyflakes, pycodestyle, import sorting, bugbear and pyupgrade.
+select = ["F", "E", "W", "I", "B", "UP"]

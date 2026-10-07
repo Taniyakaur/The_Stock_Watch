@@ -10,3 +10,4 @@ db.sqlite3
 .vscode/
 # Separate empty repo created by GitHub Desktop
 TheStockWatch/
+.ruff_cache/

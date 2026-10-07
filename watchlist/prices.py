@@ -102,7 +102,7 @@ def get_quotes(symbols):
 
     if to_fetch:
         with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(to_fetch))) as pool:
-            for s, quote in zip(to_fetch, pool.map(_fetch, to_fetch)):
+            for s, quote in zip(to_fetch, pool.map(_fetch, to_fetch), strict=True):
                 _store(s, quote)
                 result[s] = quote
     return result
