@@ -2,7 +2,7 @@
 
 A small Django app for keeping watchlists of stocks. It shows live prices and 30-day trends, and emails you when a stock reaches the target price you set.
 
-**Live site:** _add your Render URL here after deploying_ (free tier: the first visit after 15 idle minutes takes 30–60 seconds while it wakes up)
+**Live site:**(https://stock-watch-uxfb.onrender.com)(free tier: the first visit after 15 idle minutes takes 30–60 seconds while it wakes up)
 
 ![Stock Watch: a watchlist of popular stocks with prices, daily change, 30-day sparklines and a 6-month chart with a target line](docs/screenshot.png)
 
