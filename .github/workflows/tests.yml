@@ -7,6 +7,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Not a real secret: settings refuse to start without one when DEBUG is off.
+      SECRET_KEY: ci-only-insecure-key
     strategy:
       matrix:
         python-version: ["3.11", "3.14"]

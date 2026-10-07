@@ -1,0 +1,33 @@
+# Render Blueprint: a free web service plus a free PostgreSQL database.
+# In Render: New > Blueprint > pick this repo. You'll be asked for FINNHUB_API_KEY;
+# paste it into the dashboard, never into this file.
+services:
+  - type: web
+    name: stock-watch
+    runtime: python
+    plan: free
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python manage.py collectstatic --noinput &&
+      python manage.py migrate &&
+      python manage.py createcachetable
+    startCommand: gunicorn stock_watchlist.wsgi
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stock-watch-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: HTTPS
+        value: "1"
+      - key: FINNHUB_API_KEY
+        sync: false
+
+databases:
+  - name: stock-watch-db
+    plan: free

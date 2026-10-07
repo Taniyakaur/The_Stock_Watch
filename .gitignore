@@ -11,3 +11,4 @@ db.sqlite3
 # Separate empty repo created by GitHub Desktop
 TheStockWatch/
 .ruff_cache/
+staticfiles/

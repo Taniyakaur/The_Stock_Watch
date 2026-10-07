@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -25,15 +27,40 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "0") == "1"
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "Set SECRET_KEY in the environment or .env (see .env.example)."
+        )
+    SECRET_KEY = "dev-only-insecure-key"
 
 ALLOWED_HOSTS = [
     h for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h
 ]
+# Full origins (with https://) allowed to submit forms, e.g. https://myapp.onrender.com
+CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o]
+
+# Render sets this to the service's own hostname (e.g. stock-watch.onrender.com).
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+
+# HTTPS=1 when served over https behind a proxy (e.g. on Render).
+if os.environ.get("HTTPS", "0") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24  # one day; raise once everything works
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # HSTS preload is a long-term commitment for a domain we don't own (onrender.com).
+    SILENCED_SYSTEM_CHECKS = ["security.W021"]
 
 
 # Application definition
@@ -51,6 +78,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -58,6 +86,16 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Quotes are cached in the database (not process memory) so the cache survives
+# restarts and is shared by all server processes, keeping API calls under the
+# provider's rate limit. Create the table with: python manage.py createcachetable
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "cache_table",
+    }
+}
 
 # Live prices: Finnhub when a key is set, otherwise Yahoo Finance (yfinance).
 FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY", "")
@@ -79,7 +117,9 @@ DEFAULT_FROM_EMAIL = (
     os.environ.get("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "stockwatch@localhost"
 )
 # Used for the link in alert emails.
-SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000/")
+SITE_URL = os.environ.get("SITE_URL") or (
+    f"https://{RENDER_EXTERNAL_HOSTNAME}/" if RENDER_EXTERNAL_HOSTNAME else "http://127.0.0.1:8000/"
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
@@ -114,11 +154,14 @@ WSGI_APPLICATION = 'stock_watchlist.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# PostgreSQL in production via DATABASE_URL (e.g. postgres://user:pass@host/db);
+# SQLite locally when it isn't set.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 
@@ -157,6 +200,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# `collectstatic` gathers files here; WhiteNoise serves them in production.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
