@@ -10,6 +10,11 @@ FAKE_QUOTES = {
     "MSFT": {"price": Decimal("450.00"), "change_pct": None},
 }
 
+FAKE_PROFILES = {"AAPL": {"name": "Apple Inc", "exchange": "NASDAQ"}}
+FAKE_HISTORY = {
+    "AAPL": [{"date": "2026-10-06", "close": 198.5}, {"date": "2026-10-07", "close": 200.0}],
+}
+
 
 @pytest.fixture(autouse=True)
 def fake_prices(monkeypatch):
@@ -22,5 +27,8 @@ def fake_prices(monkeypatch):
         return FAKE_QUOTES.get(symbol)
 
     monkeypatch.setattr(prices, "_fetch", fetch)
+    monkeypatch.setattr(prices, "get_profile", lambda symbol: FAKE_PROFILES.get(
+        symbol, {"name": "", "exchange": ""}))
+    monkeypatch.setattr(prices, "_history_yahoo", lambda symbol, period: FAKE_HISTORY.get(symbol, []))
     yield calls
     cache.clear()

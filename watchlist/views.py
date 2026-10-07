@@ -3,6 +3,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
@@ -41,6 +42,19 @@ class StockViewSet(WarmPricesMixin, viewsets.ModelViewSet):
 
     def symbols_for(self, obj):
         return [obj.symbol]
+
+    @action(detail=True, methods=["get"])
+    def history(self, request, pk=None):
+        """Daily closing prices: /api/stocks/<id>/history/?range=1mo|6mo|1y"""
+        period = request.query_params.get("range", "1mo")
+        if period not in prices.HISTORY_RANGES:
+            raise ValidationError({"range": f"Use one of: {', '.join(prices.HISTORY_RANGES)}."})
+        stock = self.get_object()
+        return Response({
+            "symbol": stock.symbol,
+            "range": period,
+            "points": prices.get_history(stock.symbol, prices.HISTORY_RANGES[period]),
+        })
 
     def destroy(self, request, *args, **kwargs):
         try:

@@ -105,3 +105,41 @@ def test_finnhub_unknown_symbol_is_none(monkeypatch, settings):
         prices.requests, "get", lambda *a, **k: FakeResponse({"c": 0, "pc": 0})
     )
     assert prices._fetch_finnhub("ZZZZ") is None
+
+
+def test_new_stock_gets_company_name(client):
+    resp = client.post("/api/stocks/", {"symbol": "aapl"})
+    assert resp.data["name"] == "Apple Inc"
+    assert resp.data["exchange"] == "NASDAQ"
+
+
+def test_typed_name_is_kept(client):
+    resp = client.post("/api/stocks/", {"symbol": "AAPL", "name": "My Apple"})
+    assert resp.data["name"] == "My Apple"
+    assert resp.data["exchange"] == "NASDAQ"
+
+
+def test_unknown_company_name_stays_blank(client):
+    resp = client.post("/api/stocks/", {"symbol": "ZZZZ"})
+    assert resp.status_code == 201
+    assert resp.data["name"] == ""
+
+
+def test_history(client):
+    stock = Stock.objects.create(symbol="AAPL")
+    resp = client.get(f"/api/stocks/{stock.id}/history/?range=6mo")
+    assert resp.status_code == 200
+    assert resp.data["range"] == "6mo"
+    assert resp.data["points"][-1] == {"date": "2026-10-07", "close": 200.0}
+
+
+def test_history_unknown_symbol_is_empty(client):
+    stock = Stock.objects.create(symbol="ZZZZ")
+    resp = client.get(f"/api/stocks/{stock.id}/history/")
+    assert resp.data["points"] == []
+
+
+def test_history_bad_range_rejected(client):
+    stock = Stock.objects.create(symbol="AAPL")
+    resp = client.get(f"/api/stocks/{stock.id}/history/?range=10y")
+    assert resp.status_code == 400

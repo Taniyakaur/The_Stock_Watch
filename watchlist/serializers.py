@@ -41,6 +41,16 @@ class StockSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("stock with this symbol already exists.")
         return value
 
+    def create(self, validated_data):
+        # Fill in the company name/exchange when the user didn't type them.
+        if not validated_data.get("name") or not validated_data.get("exchange"):
+            profile = prices.get_profile(validated_data["symbol"])
+            validated_data["name"] = validated_data.get("name") or profile["name"][:200]
+            validated_data["exchange"] = (
+                validated_data.get("exchange") or profile["exchange"][:50]
+            )
+        return super().create(validated_data)
+
 
 class WatchlistItemSerializer(serializers.ModelSerializer):
     stock_detail = StockSerializer(source="stock", read_only=True)

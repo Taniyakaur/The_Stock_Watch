@@ -20,6 +20,7 @@
   .layout { display: grid; grid-template-columns: 260px 1fr; gap: 20px;
             max-width: 1100px; margin: 20px auto; padding: 0 16px; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  .layout > * { min-width: 0; }  /* let the table scroll instead of widening the page */
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
   .lists { list-style: none; margin: 0 0 14px; padding: 0; }
@@ -46,7 +47,7 @@
   th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600;
        text-transform: uppercase; letter-spacing: .04em; padding: 8px; border-bottom: 1px solid var(--line); }
   td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .sym { font-weight: 700; }
   .name { color: var(--muted); font-size: 13px; }
   .up { color: var(--up); } .down { color: var(--down); }
@@ -60,6 +61,35 @@
   .msg.error { background: var(--down-soft); color: var(--down); }
   .msg.ok { background: var(--up-soft); color: var(--up); }
   .foot { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .symbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
+            font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+            text-decoration-color: transparent; }
+  .symbtn:hover, .symbtn:focus-visible { text-decoration-color: currentColor; }
+  td.spark { width: 104px; color: var(--muted); }
+  td.spark svg { display: block; }
+  .detail { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .detail-head .title { font-size: 17px; }
+  .detail-head .sub { color: var(--muted); font-size: 14px; }
+  .ranges { display: flex; gap: 6px; align-items: center; }
+  .chip { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+          border: 1px solid var(--line); background: #fff; color: var(--muted); }
+  .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .chart-wrap { position: relative; margin-top: 10px; }
+  .chart text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .target { stroke: var(--text); stroke-width: 1; stroke-dasharray: 5 4; opacity: .55; }
+  .chart .target-label { fill: var(--text); font-weight: 600; }
+  .chart .cross { stroke: var(--muted); stroke-width: 1; }
+  .chart .dot { fill: var(--accent); stroke: #fff; stroke-width: 2; }
+  .chart .hit { fill: transparent; cursor: crosshair; outline: none; }
+  .tip { position: absolute; pointer-events: none; background: var(--text); color: #fff; border-radius: 6px;
+         padding: 5px 9px; font-size: 13px; white-space: nowrap; transform: translate(-50%, -100%); }
+  .tip b { font-variant-numeric: tabular-nums; }
+  details.data { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  details.data table { max-width: 320px; margin-top: 6px; }
+  details.data .scroll { max-height: 220px; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -85,6 +115,7 @@
 const API = "/api";
 let lists = [];
 let currentId = null;
+let detail = null;  // the stock whose big chart is open: {stockId, symbol, name, target, range}
 
 function csrf() {
   const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
@@ -151,6 +182,7 @@ function renderLists() {
 }
 
 async function select(id) {
+  if (id !== currentId) detail = null;
   currentId = id;
   renderLists();
   await renderMain();
@@ -188,6 +220,7 @@ async function renderMain() {
     body = el("div", { class: "table-wrap" }, el("table", {},
       el("thead", {}, el("tr", {},
         el("th", {}, "Stock"), el("th", { class: "num" }, "Price"), el("th", { class: "num" }, "Today"),
+        el("th", {}, "30 days"),
         el("th", { class: "num" }, "Target"), el("th", {}, "Status"), el("th", {}, ""))),
       el("tbody", {}, ...items.map(itemRow))));
   }
@@ -198,7 +231,13 @@ async function renderMain() {
       el("h2", {}, wl.name),
       el("button", { class: "btn ghost", onclick: () => deleteList(wl) }, "Delete list")),
     addForm, body,
-    el("p", { class: "foot" }, "Prices refresh every minute. “Today” is the change since yesterday’s close."));
+    el("div", { id: "detail" }),
+    el("p", { class: "foot" }, "Prices refresh every minute. “Today” is the change since yesterday’s close. Click a symbol to see its chart."));
+
+  if (detail) {
+    const item = wl.items.find(i => i.stock === detail.stockId);
+    if (item) { detail.target = item.target_price; renderDetail(); } else detail = null;
+  }
 }
 
 function itemRow(item) {
@@ -226,13 +265,194 @@ function itemRow(item) {
   if (item.target_price != null) target.value = item.target_price;
 
   return el("tr", {},
-    el("td", {}, el("div", { class: "sym" }, s.symbol), s.name ? el("div", { class: "name" }, s.name) : null,
+    el("td", {}, el("button", { class: "symbtn", title: "Show chart", onclick: () => openDetail(item) }, s.symbol), s.name ? el("div", { class: "name" }, s.name) : null,
       item.notes ? el("div", { class: "name" }, "📝 " + item.notes) : null),
     el("td", { class: "num" }, money(s.current_price)),
     changeCell,
+    sparkCell(s),
     el("td", { class: "num" }, target),
     el("td", {}, status),
     el("td", {}, el("button", { class: "btn ghost", onclick: () => removeItem(item) }, "Remove")));
+}
+
+// ---------- Charts ----------
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svg(tag, attrs = {}) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+
+const historyCache = new Map();
+async function getHistory(stockId, range) {
+  const key = stockId + ":" + range;
+  const hit = historyCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.points;
+  const data = await api(`/stocks/${stockId}/history/?range=${range}`);
+  historyCache.set(key, { at: Date.now(), points: data.points });
+  return data.points;
+}
+
+function pct(a, b) { return (b / a - 1) * 100; }
+function signed(n) { return (n >= 0 ? "+" : "") + n.toFixed(1) + "%"; }
+function shortDate(d, withYear) {
+  return new Date(d + "T00:00:00").toLocaleDateString(undefined,
+    withYear ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" });
+}
+
+function sparkCell(stock) {
+  const td = el("td", { class: "spark" }, "…");
+  getHistory(stock.id, "1mo").then(points => {
+    if (points.length < 2) { td.textContent = "—"; return; }
+    const W = 96, H = 28, P = 2;
+    const ys = points.map(p => p.close);
+    const min = Math.min(...ys), span = (Math.max(...ys) - min) || 1;
+    const coords = ys.map((v, i) =>
+      `${(P + i * (W - 2 * P) / (ys.length - 1)).toFixed(1)},${(H - P - (v - min) / span * (H - 2 * P)).toFixed(1)}`);
+    const change = pct(ys[0], ys[ys.length - 1]);
+    const label = `Last 30 days: ${signed(change)}`;
+    const chart = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": label });
+    chart.append(svg("polyline", {
+      points: coords.join(" "), fill: "none", stroke: change >= 0 ? "var(--up)" : "var(--down)",
+      "stroke-width": "1.5", "stroke-linejoin": "round", "stroke-linecap": "round",
+    }));
+    const title = svg("title"); title.textContent = label; chart.append(title);
+    td.replaceChildren(chart);
+  }).catch(() => { td.textContent = "—"; });
+  return td;
+}
+
+function niceTicks(min, max, count) {
+  const raw = (max - min) / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const ticks = [];
+  for (let t = Math.ceil(min / step) * step; t <= max + 1e-9; t += step) ticks.push(+t.toFixed(10));
+  return ticks;
+}
+
+function openDetail(item) {
+  const s = item.stock_detail;
+  detail = { stockId: s.id, symbol: s.symbol, name: s.name, target: item.target_price, range: detail?.range || "6mo" };
+  renderDetail();
+  document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function renderDetail() {
+  const box = document.getElementById("detail");
+  if (!box || !detail) return;
+  const d = detail;
+  const RANGES = [["1mo", "1M", "month"], ["6mo", "6M", "6 months"], ["1y", "1Y", "year"]];
+  const sub = el("div", { class: "sub" }, "Loading…");
+  const chartWrap = el("div", { class: "chart-wrap" });
+  box.className = "detail";
+  box.replaceChildren(
+    el("div", { class: "detail-head" },
+      el("div", {}, el("div", { class: "title" }, el("strong", {}, d.symbol), d.name ? " · " + d.name : ""), sub),
+      el("div", { class: "ranges" },
+        ...RANGES.map(([r, label]) => el("button", {
+          class: "chip" + (r === d.range ? " active" : ""),
+          onclick: () => { d.range = r; renderDetail(); },
+        }, label)),
+        el("button", { class: "btn ghost", onclick: () => { detail = null; box.replaceChildren(); box.className = ""; } }, "Close"))),
+    chartWrap);
+
+  let points;
+  try { points = await getHistory(d.stockId, d.range); }
+  catch (err) { sub.textContent = err.message; return; }
+  if (detail !== d) return;  // closed or switched while loading
+  if (points.length < 2) { sub.textContent = "No price history found for this symbol."; return; }
+
+  const change = pct(points[0].close, points[points.length - 1].close);
+  const period = RANGES.find(([r]) => r === d.range)[2];
+  sub.replaceChildren(el("span", { class: change >= 0 ? "up" : "down" }, (change >= 0 ? "▲ " : "▼ ") + signed(change)),
+    ` over the last ${period}`);
+  drawChart(chartWrap, points, d.target == null ? null : Number(d.target), d.range === "1y");
+
+  const rows = [...points].reverse().map(p => el("tr", {},
+    el("td", {}, shortDate(p.date, true)), el("td", { class: "num" }, money(p.close))));
+  box.append(el("details", { class: "data" }, el("summary", {}, "Show these prices as a table"),
+    el("div", { class: "scroll" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Date"), el("th", { class: "num" }, "Close"))),
+      el("tbody", {}, ...rows)))));
+}
+
+function drawChart(wrap, points, target, withYear) {
+  const W = Math.max(wrap.clientWidth, 280), H = 260;
+  const m = { top: 14, right: 14, bottom: 28, left: 60 };
+  const ys = points.map(p => p.close);
+  let min = Math.min(...ys), max = Math.max(...ys);
+  if (target != null) { min = Math.min(min, target); max = Math.max(max, target); }
+  const pad = (max - min) * 0.08 || 1;
+  min -= pad; max += pad;
+  const x = i => m.left + i * (W - m.left - m.right) / (points.length - 1);
+  const y = v => m.top + (max - v) / (max - min) * (H - m.top - m.bottom);
+
+  const chart = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart", role: "img",
+    "aria-label": `${detail.symbol} closing prices from ${shortDate(points[0].date, true)} to ${shortDate(points[points.length - 1].date, true)}` });
+
+  for (const t of niceTicks(min, max, 4)) {
+    chart.append(svg("line", { class: "grid", x1: m.left, x2: W - m.right, y1: y(t), y2: y(t) }));
+    const label = svg("text", { x: m.left - 8, y: y(t) + 4, "text-anchor": "end" });
+    label.textContent = money(t);
+    chart.append(label);
+  }
+  for (const i of [0, Math.floor((points.length - 1) / 2), points.length - 1]) {
+    const label = svg("text", { x: x(i), y: H - 8, "text-anchor": i === 0 ? "start" : i === points.length - 1 ? "end" : "middle" });
+    label.textContent = shortDate(points[i].date, withYear);
+    chart.append(label);
+  }
+
+  if (target != null) {
+    chart.append(svg("line", { class: "target", x1: m.left, x2: W - m.right, y1: y(target), y2: y(target) }));
+    const label = svg("text", { class: "target-label", x: W - m.right, y: y(target) - 6, "text-anchor": "end" });
+    label.textContent = "Your target " + money(target);
+    chart.append(label);
+  }
+
+  chart.append(svg("path", { class: "line", d: ys.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("") }));
+
+  const cross = svg("line", { class: "cross", y1: m.top, y2: H - m.bottom, visibility: "hidden" });
+  const dot = svg("circle", { class: "dot", r: 5, visibility: "hidden" });
+  const hit = svg("rect", { class: "hit", x: m.left, y: 0, width: W - m.left - m.right, height: H, tabindex: 0,
+    "aria-label": "Use left and right arrow keys to read prices" });
+  chart.append(cross, dot, hit);
+  const tip = el("div", { class: "tip" });
+  tip.hidden = true;
+
+  let current = null;
+  function show(i) {
+    current = Math.max(0, Math.min(points.length - 1, i));
+    const px = x(current), py = y(points[current].close);
+    for (const [k, v] of [["x1", px], ["x2", px]]) cross.setAttribute(k, v);
+    dot.setAttribute("cx", px); dot.setAttribute("cy", py);
+    cross.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible");
+    tip.replaceChildren(shortDate(points[current].date, true) + "  ", el("b", {}, money(points[current].close)));
+    tip.hidden = false;
+    const scale = chart.getBoundingClientRect().width / W;
+    tip.style.left = Math.min(Math.max(px * scale, 70), wrap.clientWidth - 70) + "px";
+    tip.style.top = (py * scale - 10) + "px";
+  }
+  function hide() {
+    cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
+    tip.hidden = true; current = null;
+  }
+  hit.addEventListener("pointermove", e => {
+    const rect = chart.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * W / rect.width;
+    show(Math.round((px - m.left) / (W - m.left - m.right) * (points.length - 1)));
+  });
+  hit.addEventListener("pointerleave", hide);
+  hit.addEventListener("blur", hide);
+  hit.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      show((current ?? points.length - 1) + (e.key === "ArrowRight" ? 1 : -1));
+    }
+  });
+
+  wrap.replaceChildren(chart, tip);
 }
 
 async function run(action, okText) {
